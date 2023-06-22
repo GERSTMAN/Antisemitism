@@ -166,3 +166,216 @@ memory usage: 1.8+ MB
 ```
 
 After reducing the the dataframe to 40% of it's original size, we can now drill down into the data:
+
+
+
+# the Demographic Factor
+
+```
+#State name dictionary. courtesy of https://gist.github.com/rogerallen/1583593. Then I added a few
+
+ state_ab_dict = {
+"Alabama": "AL",
+"Alaska": "AK",
+"Arizona": "AZ",
+"Arkansas": "AR",
+"California": "CA",
+"Colorado": "CO",
+"Connecticut": "CT",
+"Delaware": "DE",
+"Florida": "FL",
+"Georgia": "GA",
+"Hawaii": "HI",
+"Idaho": "ID",
+"Illinois": "IL",
+"Indiana": "IN",
+"Iowa": "IA",
+"Kansas": "KS",
+"Kentucky": "KY",
+"Louisiana": "LA",
+"Maine": "ME",
+"Maryland": "MD",
+"Massachusetts": "MA",
+"Michigan": "MI",
+"Minnesota": "MN",
+"Mississippi": "MS",
+"Missouri": "MO",
+"Montana": "MT",
+"Nebraska": "NE",
+"Nevada": "NV",
+"New Hampshire": "NH",
+"New Jersey": "NJ",
+"New Mexico": "NM",
+"New York": "NY",
+"North Carolina": "NC",
+"North Dakota": "ND",
+"Ohio": "OH",
+"Oklahoma": "OK",
+"Oregon": "OR",
+"Pennsylvania": "PA",
+"Rhode Island": "RI",
+"South Carolina": "SC",
+"South Dakota": "SD",
+"Tennessee": "TN",
+"Texas": "TX",
+"Utah": "UT",
+"Vermont": "VT",
+"Virginia": "VA",
+"Washington": "WA",
+"West Virginia": "WV",
+"Wisconsin": "WI",
+"Wyoming": "WY",
+"District of Columbia": "DC",
+"Alab.": "AL",
+"Ark.": "AR",
+"Calif.": "CA",
+"Colo.": "CO",
+"Conn.": "CT",
+"Del.": "DE",
+"D.C.": "DC",
+"Ky.": "KY",
+"La.": "LA",
+"Maine †": "ME",
+"Md.": "MD",
+"Mass.": "MA",
+"Mich.": "MI",
+"Minn.": "MN",
+"Miss.": "MS",
+"Mo.": "MO",
+"Mont.": "MT",
+"Neb. †": "NE",
+"Nev.[q]": "NV",
+"N.H.": "NH",
+"N.J.[r]": "NJ",
+"N.M.": "NM",
+"N.Y.": "NY",
+"N.C.": "NC",
+"N.D.": "ND",
+"Okla.": "OK",
+"Pa.": "PA",
+"R.I.": "RI",
+"S.C.": "SC",
+"S.D.": "SD",
+"Tenn.": "TN",
+"Texas[s]": "TX",
+"Vt.": "VT",
+"Va.": "VA",
+"Wash.": "WA",
+"W.Va.": "WV",
+"Wis.": "WI",
+"Wyo.": "WY"}
+```
+
+1. Jewish population
+
+```
+url_1 = 'https://en.wikipedia.org/w/index.php?title=American_Jews&oldid=1160034360'
+```
+
+Here and later on I used the permanent link to the most recent version in the entry's history so that future edits won't disrupt the project
+
+```
+dfs_1 = pd.read_html(url_1)
+
+jews_num = dfs_1[11]
+```
+
+2. Muslim population
+
+```
+url_2 = 'https://en.wikipedia.org/w/index.php?title=Islam_in_the_United_States&oldid=1160898319'
+
+dfs_2 = pd.read_html(url_2)
+
+isl_num = dfs_2[2]
+```
+
+3. General population
+
+```
+url_3 = 'https://en.wikipedia.org/w/index.php?title=2020_United_States_census&oldid=1161035383'
+
+dfs_3 = pd.read_html(url_3)
+
+tot_num = dfs_3[2]
+```
+
+4. Votes
+
+```
+url_4 = 'https://en.wikipedia.org/w/index.php?title=2020_United_States_presidential_election&oldid=1160932277'
+
+dfs_4 = pd.read_html(url_4)
+
+voters = dfs_4[21]
+
+votepct = voters.iloc[:,[0,1,4]]
+```
+The dataframe initially was a multi index, which would've complicated matters when attempting to merge the data into a single dataframe.
+
+```
+votepct_f = votepct.copy()
+votepct_f.columns = votepct.columns.get_level_values(0)
+```
+
+5. Merge tables
+
+```
+jews_num['state']= jews_num['States and territories'].apply(lambda x: state_ab_dict.get(x, 'Unknown'))
+
+isl_num['state']= isl_num['State'].apply(lambda x: state_ab_dict.get(x, 'Unknown'))
+
+tot_num['state']= tot_num['State'].apply(lambda x: state_ab_dict.get(x, 'Unknown'))
+
+votepct_f['state']= votepct_f['State or district'].apply(lambda x: state_ab_dict.get(x, 'Unknown'))
+
+jews_num = jews_num.rename(columns={'American Jews (2020)[68]': 'Jewish Population'})
+isl_num = isl_num.rename(columns={'Muslim (estimate)[138]': 'Muslim Population'})
+tot_num = tot_num.rename(columns={'Population as of 2020 census[80]': 'Total Population'})
+votepct_f = votepct_f.rename(columns={'Biden/Harris Democratic': 'Biden votes',
+                                    'Trump/Pence Republican': 'Trump votes'})
+
+demographics = pd.merge(jews_num[['state', 'Jewish Population']],
+                     isl_num[['state', 'Muslim Population']],
+                     on='state')
+demographics = pd.merge(demographics, tot_num[['state', 'Total Population']], on='state')
+demographics = pd.merge(demographics, votepct_f[['state', 'Biden votes', 'Trump votes']], on='state')
+
+demographics
+```
+
+|	|state|	Jewish Population|	Muslim Population|	Total Population|	Biden votes|	Trump votes|
+|---|---|---|---|---|---|---|
+|0|	AL|	10325|	23550|	5024279|	849624|	1441170|
+|1|	AK|	5750|	400|	733391|	153778|	189951|
+|2|	AZ|	106300|	109765|	7151502|	1672143|	1661686|
+...
+|48|	WV|	2310|	849|	1793716|	235984|	545382|
+|49|	WI|	33455|	68699|	5893718|	1630866|	1610184|
+|50|	WY|	1150|	226|	576851|	73491|	193559|
+
+5. Insert Antisemitism Data
+
+```
+anti_20 = antisemitism.loc[antisemitism['year']==2020]
+
+anti_20
+```
+
+```
+twenty_state = pd.pivot_table(anti_20, values='id', index='state',
+               aggfunc='count')
+
+twenty_state['antisemitic'] = pd.pivot_table(anti_20[anti_20['type'].str.contains('antisemitic', case = False)], values='id', index='state',
+               aggfunc='count')
+
+twenty_state['white supremacist'] = pd.pivot_table(anti_20[anti_20['type'].str.contains('white supremacist', case = False)], values='id', index='state', aggfunc='count')
+
+twenty_state['police shootout'] = pd.pivot_table(anti_20[anti_20['type'].str.contains('police shootout', case = False)], values='id', index='state', aggfunc='count')
+
+twenty_state['murder'] = pd.pivot_table(anti_20[anti_20['type'].str.contains('murder', case = False)], values='id', index='state', aggfunc='count')
+
+twenty_state['terrorist'] = pd.pivot_table(anti_20[anti_20['type'].str.contains('terrorist', case = False)], values='id', index='state', aggfunc='count')
+
+twenty_state
+```
